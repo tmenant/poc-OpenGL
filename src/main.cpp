@@ -1,10 +1,15 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <filesystem>
 #include <sstream>
 #include <string>
+#include <vector>
+
+namespace fs = std::filesystem;
 
 std::string readFile(const char *filePath)
 {
@@ -29,17 +34,67 @@ std::string readFile(const char *filePath)
     return contenu;
 }
 
-void framebuffer_size_callback(GLFWwindow *window, int width, int height);
-void processInput(GLFWwindow *window);
+// process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
+void processInput(GLFWwindow *window)
+{
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+    {
+        glfwSetWindowShouldClose(window, true);
+    }
+}
 
-const unsigned int SCR_WIDTH = 800;
-const unsigned int SCR_HEIGHT = 600;
+// glfw: whenever the window size changed (by OS or user resize) this callback function executes
+void framebuffer_size_callback(GLFWwindow *window, int width, int height)
+{
+    // make sure the viewport matches the new window dimensions; note that width and
+    // height will be significantly larger than specified on retina displays.
+    glViewport(0, 0, width, height);
+}
 
-const std::string vertexCode = readFile("shaders/triangle.vert");
-const std::string fragmentCode = readFile("shaders/triangle.frag");
+uint32_t glCompileShaders()
+{
+    unsigned int shaderProgram = glCreateProgram();
 
-const char *vShaderCode = vertexCode.c_str();
-const char *fShaderCode = fragmentCode.c_str();
+    std::vector<unsigned int> shaders;
+
+    for (auto &file : fs::recursive_directory_iterator("shaders"))
+    {
+        if (file.path().extension() == ".vert")
+        {
+            const std::string shaderCode = readFile(file.path().string().c_str());
+            const char *codePtr = shaderCode.c_str();
+
+            unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
+            glShaderSource(vertexShader, 1, &codePtr, NULL);
+            glCompileShader(vertexShader);
+            glAttachShader(shaderProgram, vertexShader);
+
+            shaders.push_back(vertexShader);
+        }
+
+        if (file.path().extension() == ".frag")
+        {
+            const std::string shaderCode = readFile(file.path().string().c_str());
+            const char *codePtr = shaderCode.c_str();
+
+            unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+            glShaderSource(fragmentShader, 1, &codePtr, NULL);
+            glCompileShader(fragmentShader);
+            glAttachShader(shaderProgram, fragmentShader);
+
+            shaders.push_back(fragmentShader);
+        }
+    }
+
+    glLinkProgram(shaderProgram);
+
+    for (int shader : shaders)
+    {
+        glDeleteShader(shader);
+    }
+
+    return shaderProgram;
+}
 
 int main()
 {
@@ -48,7 +103,7 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
+    GLFWwindow *window = glfwCreateWindow(800, 600, "LearnOpenGL", NULL, NULL);
     if (window == NULL)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
@@ -64,29 +119,7 @@ int main()
         return -1;
     }
 
-    // --- COMPILATION DES SHADERS ---
-
-    // Vertex Shader
-    unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vShaderCode, NULL);
-    glCompileShader(vertexShader);
-
-    // Fragment Shader
-    unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fShaderCode, NULL);
-    glCompileShader(fragmentShader);
-
-    // Lier les shaders dans un "Shader Program"
-    unsigned int shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-
-    // On peut supprimer les shaders individuels une fois liés au programme
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-
-    // --- PRÉPARATION DES DONNÉES DU TRIANGLE ---
+    uint32_t shaderProgram = glCompileShaders();
 
     // Coordonnées des 3 sommets (X, Y, Z)
     float vertices[] = {
@@ -143,21 +176,4 @@ int main()
 
     glfwTerminate();
     return 0;
-}
-
-// process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
-void processInput(GLFWwindow *window)
-{
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-    {
-        glfwSetWindowShouldClose(window, true);
-    }
-}
-
-// glfw: whenever the window size changed (by OS or user resize) this callback function executes
-void framebuffer_size_callback(GLFWwindow *window, int width, int height)
-{
-    // make sure the viewport matches the new window dimensions; note that width and
-    // height will be significantly larger than specified on retina displays.
-    glViewport(0, 0, width, height);
 }
